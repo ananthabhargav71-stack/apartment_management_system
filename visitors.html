@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visitors | Apartment VMS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <main class="container">
+    <h1>Visitors</h1>
+
+    <section class="card">
+      <h2 id="formTitle">Add visitor</h2>
+      <form id="form">
+        <div><label for="name">Name *</label><input id="name" maxlength="100" required></div>
+        <div><label for="phone">Phone (10 digits) *</label><input id="phone" maxlength="10" inputmode="numeric" required></div>
+        <div><label for="vehicle_no">Vehicle no</label><input id="vehicle_no" maxlength="30"></div>
+        <div><label for="purpose">Purpose</label><input id="purpose" maxlength="150"></div>
+        <div>
+          <button class="btn" type="submit" id="saveBtn">Add</button>
+          <button class="btn btn-secondary" type="button" id="cancelBtn" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Vehicle</th><th>Purpose</th><th>Actions</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+  <script>
+    let rows = [];
+    let editId = null;
+
+    const $ = id => document.getElementById(id);
+
+    async function load() {
+      try {
+        rows = await api('/api/visitors');
+        $('tbody').innerHTML = rows.length ? rows.map(v => `
+          <tr>
+            <td>${v.visitor_id}</td>
+            <td>${esc(v.name)}</td>
+            <td>${esc(v.phone)}</td>
+            <td>${esc(v.vehicle_no) || '-'}</td>
+            <td>${esc(v.purpose) || '-'}</td>
+            <td>
+              <button class="btn btn-sm" onclick="startEdit(${v.visitor_id})">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="remove(${v.visitor_id})">Delete</button>
+            </td>
+          </tr>`).join('')
+          : '<tr><td colspan="6" class="empty">No visitors yet.</td></tr>';
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    function resetForm() {
+      editId = null;
+      $('form').reset();
+      $('formTitle').textContent = 'Add visitor';
+      $('saveBtn').textContent = 'Add';
+      $('cancelBtn').hidden = true;
+    }
+
+    function startEdit(id) {
+      const v = rows.find(x => x.visitor_id === id);
+      editId = id;
+      $('name').value = v.name;
+      $('phone').value = v.phone;
+      $('vehicle_no').value = v.vehicle_no || '';
+      $('purpose').value = v.purpose || '';
+      $('formTitle').textContent = `Edit visitor #${id}`;
+      $('saveBtn').textContent = 'Update';
+      $('cancelBtn').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    $('cancelBtn').onclick = resetForm;
+
+    $('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = {
+        name: $('name').value.trim(),
+        phone: $('phone').value.trim(),
+        vehicle_no: $('vehicle_no').value.trim().toUpperCase(),
+        purpose: $('purpose').value.trim()
+      };
+      if (!body.name) return toast('Name is required.', 'err');
+      if (!isPhone(body.phone)) return toast('Phone must be exactly 10 digits.', 'err');
+
+      try {
+        if (editId) await api(`/api/visitors/${editId}`, 'PUT', body);
+        else await api('/api/visitors', 'POST', body);
+        toast(editId ? 'Visitor updated.' : 'Visitor added.');
+        resetForm();
+        load();
+      } catch (err) { toast(err.message, 'err'); }
+    });
+
+    async function remove(id) {
+      if (!confirm('Delete this visitor?')) return;
+      try {
+        await api(`/api/visitors/${id}`, 'DELETE');
+        toast('Visitor deleted.');
+        load();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    load();
+  </script>
+</body>
+</html>

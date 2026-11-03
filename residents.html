@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Residents | Apartment VMS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <main class="container">
+    <h1>Residents</h1>
+
+    <section class="card">
+      <h2 id="formTitle">Add resident</h2>
+      <form id="form">
+        <div><label for="name">Name *</label><input id="name" maxlength="100" required></div>
+        <div><label for="flat_no">Flat no *</label><input id="flat_no" maxlength="20" required></div>
+        <div><label for="phone">Phone (10 digits) *</label><input id="phone" maxlength="10" inputmode="numeric" required></div>
+        <div><label for="email">Email</label><input id="email" type="email" maxlength="100"></div>
+        <div>
+          <button class="btn" type="submit" id="saveBtn">Add</button>
+          <button class="btn btn-secondary" type="button" id="cancelBtn" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Flat</th><th>Phone</th><th>Email</th><th>Actions</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+  <script>
+    let rows = [];
+    let editId = null;
+
+    const $ = id => document.getElementById(id);
+
+    async function load() {
+      try {
+        rows = await api('/api/residents');
+        $('tbody').innerHTML = rows.length ? rows.map(r => `
+          <tr>
+            <td>${r.resident_id}</td>
+            <td>${esc(r.name)}</td>
+            <td>${esc(r.flat_no)}</td>
+            <td>${esc(r.phone)}</td>
+            <td>${esc(r.email) || '-'}</td>
+            <td>
+              <button class="btn btn-sm" onclick="startEdit(${r.resident_id})">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="remove(${r.resident_id})">Delete</button>
+            </td>
+          </tr>`).join('')
+          : '<tr><td colspan="6" class="empty">No residents yet.</td></tr>';
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    function resetForm() {
+      editId = null;
+      $('form').reset();
+      $('formTitle').textContent = 'Add resident';
+      $('saveBtn').textContent = 'Add';
+      $('cancelBtn').hidden = true;
+    }
+
+    function startEdit(id) {
+      const r = rows.find(x => x.resident_id === id);
+      editId = id;
+      $('name').value = r.name;
+      $('flat_no').value = r.flat_no;
+      $('phone').value = r.phone;
+      $('email').value = r.email || '';
+      $('formTitle').textContent = `Edit resident #${id}`;
+      $('saveBtn').textContent = 'Update';
+      $('cancelBtn').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    $('cancelBtn').onclick = resetForm;
+
+    $('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = {
+        name: $('name').value.trim(),
+        flat_no: $('flat_no').value.trim(),
+        phone: $('phone').value.trim(),
+        email: $('email').value.trim()
+      };
+      if (!body.name || !body.flat_no) return toast('Name and flat number are required.', 'err');
+      if (!isPhone(body.phone)) return toast('Phone must be exactly 10 digits.', 'err');
+      if (!isEmail(body.email)) return toast('Enter a valid email.', 'err');
+
+      try {
+        if (editId) await api(`/api/residents/${editId}`, 'PUT', body);
+        else await api('/api/residents', 'POST', body);
+        toast(editId ? 'Resident updated.' : 'Resident added.');
+        resetForm();
+        load();
+      } catch (err) { toast(err.message, 'err'); }
+    });
+
+    async function remove(id) {
+      if (!confirm('Delete this resident?')) return;
+      try {
+        await api(`/api/residents/${id}`, 'DELETE');
+        toast('Resident deleted.');
+        load();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard | Apartment VMS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <main class="container">
+    <h1>Dashboard</h1>
+
+    <section class="stats">
+      <div class="stat"><div class="num" id="statInside">-</div><div class="label">Visitors inside now</div></div>
+      <div class="stat"><div class="num" id="statToday">-</div><div class="label">Visits today</div></div>
+      <div class="stat"><div class="num" id="statResidents">-</div><div class="label">Total residents</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Currently inside</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Visitor</th><th>Visiting</th><th>Flat</th><th>Entry time</th><th>Action</th></tr>
+          </thead>
+          <tbody id="insideBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+  <script>
+    async function loadDashboard() {
+      try {
+        const [stats, inside] = await Promise.all([
+          api('/api/stats'),
+          api('/api/visits?status=Checked In')
+        ]);
+        document.getElementById('statInside').textContent = stats.inside;
+        document.getElementById('statToday').textContent = stats.today;
+        document.getElementById('statResidents').textContent = stats.residents;
+
+        const body = document.getElementById('insideBody');
+        if (!inside.length) {
+          body.innerHTML = '<tr><td colspan="5" class="empty">Nobody is inside right now.</td></tr>';
+          return;
+        }
+        body.innerHTML = inside.map(v => `
+          <tr>
+            <td>${esc(v.visitor_name)}</td>
+            <td>${esc(v.resident_name)}</td>
+            <td>${esc(v.flat_no)}</td>
+            <td>${fmtDate(v.entry_time)}</td>
+            <td><button class="btn btn-sm" onclick="checkOut(${v.visit_id})">Check Out</button></td>
+          </tr>`).join('');
+      } catch (e) {
+        toast(e.message, 'err');
+      }
+    }
+
+    async function checkOut(id) {
+      try {
+        await api(`/api/visits/${id}/checkout`, 'PUT');
+        toast('Visitor checked out.');
+        loadDashboard();
+      } catch (e) {
+        toast(e.message, 'err');
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

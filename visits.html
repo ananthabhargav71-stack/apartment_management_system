@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visits | Apartment VMS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <main class="container">
+    <h1>Visits</h1>
+
+    <section class="card">
+      <h2>Check in a visitor</h2>
+      <form id="form">
+        <div><label for="resident">Visiting resident *</label><select id="resident" required></select></div>
+        <div><label for="visitor">Visitor *</label><select id="visitor" required></select></div>
+        <div><button class="btn" type="submit">Check In</button></div>
+      </form>
+      <p style="margin-top:10px;font-size:0.85rem;color:#6b5a4e;">
+        New visitor? Add them on the Visitors page first, then come back here.
+      </p>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;">Visit log</h2>
+        <select id="filter" style="width:auto;">
+          <option value="">All visits</option>
+          <option value="Checked In">Checked In</option>
+          <option value="Checked Out">Checked Out</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Visitor</th><th>Resident</th><th>Flat</th><th>Entry</th><th>Exit</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+
+    async function loadDropdowns() {
+      try {
+        const [residents, visitors] = await Promise.all([api('/api/residents'), api('/api/visitors')]);
+        $('resident').innerHTML = '<option value="">Select resident</option>' +
+          residents.map(r => `<option value="${r.resident_id}">${esc(r.name)} (${esc(r.flat_no)})</option>`).join('');
+        $('visitor').innerHTML = '<option value="">Select visitor</option>' +
+          visitors.map(v => `<option value="${v.visitor_id}">${esc(v.name)} (${esc(v.phone)})</option>`).join('');
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    async function loadVisits() {
+      try {
+        const status = $('filter').value;
+        const rows = await api('/api/visits' + (status ? `?status=${encodeURIComponent(status)}` : ''));
+        $('tbody').innerHTML = rows.length ? rows.map(v => `
+          <tr>
+            <td>${v.visit_id}</td>
+            <td>${esc(v.visitor_name)}</td>
+            <td>${esc(v.resident_name)}</td>
+            <td>${esc(v.flat_no)}</td>
+            <td>${fmtDate(v.entry_time)}</td>
+            <td>${fmtDate(v.exit_time)}</td>
+            <td>${badge(v.status)}</td>
+            <td>${v.status === 'Checked In'
+              ? `<button class="btn btn-sm" onclick="checkOut(${v.visit_id})">Check Out</button>` : '-'}</td>
+          </tr>`).join('')
+          : '<tr><td colspan="8" class="empty">No visits found.</td></tr>';
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    $('form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const resident_id = $('resident').value;
+      const visitor_id = $('visitor').value;
+      if (!resident_id || !visitor_id) return toast('Select both a resident and a visitor.', 'err');
+      try {
+        await api('/api/visits', 'POST', { resident_id, visitor_id });
+        toast('Visitor checked in.');
+        $('form').reset();
+        loadVisits();
+      } catch (err) { toast(err.message, 'err'); }
+    });
+
+    async function checkOut(id) {
+      try {
+        await api(`/api/visits/${id}/checkout`, 'PUT');
+        toast('Visitor checked out.');
+        loadVisits();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+
+    $('filter').addEventListener('change', loadVisits);
+
+    loadDropdowns();
+    loadVisits();
+  </script>
+</body>
+</html>
